@@ -1,0 +1,44 @@
+esphomeyaml:
+  name: tempsensor
+  platform: ESP8266
+  board: nodemcuv2
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_pass
+
+mqtt:
+  broker: !secret mqtt_host
+  username: 'tempsensor'
+  password: !secret mqtt_pass
+
+# Enable logging
+logger:
+
+ota:
+
+i2c:
+  sda: GPIO4
+  scl: GPIO5
+  scan: False
+
+sensor:
+  - platform: htu21d
+    temperature:
+      name: "HTU21D Temperature"
+    humidity:
+      name: "HTU21D Humidity"
+    update_interval: 15s
+  - platform: bmp280
+    temperature:
+      name: "BMP280 Temperature"
+      oversampling: 16x
+    pressure:
+      name: "BMP280 Pressure"
+    address: 0x77
+    update_interval: 15s
+  - platform: bh1750
+    name: "BH1750 Illuminance"
+    address: 0x23
+    update_interval: 15s
+

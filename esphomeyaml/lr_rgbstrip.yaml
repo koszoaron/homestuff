@@ -1,0 +1,51 @@
+esphomeyaml:
+  name: lr_rgbstrip
+  platform: ESP8266
+  board: esp01_1m
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_pass
+
+ota:
+
+mqtt:
+  broker: !secret mqtt_host
+  username: 'lr_rgbstrip'
+  password: !secret mqtt_pass
+
+# Enable logging
+logger:
+
+output:
+  - platform: esp8266_pwm
+    pin: GPIO14
+    frequency: 1000 Hz
+    id: pwmout_r
+  - platform: esp8266_pwm
+    pin: GPIO12
+    frequency: 1000 Hz
+    id: pwmout_g
+  - platform: esp8266_pwm
+    pin: GPIO13
+    frequency: 1000 Hz
+    id: pwmout_b
+
+light:
+  - platform: rgb
+    name: "Living Room RGB Strip"
+    red: pwmout_r
+    green: pwmout_g
+    blue: pwmout_b
+    id: lrrgb_light
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO0
+      mode: INPUT_PULLUP
+      inverted: True
+    id: lrrgb_btn0
+    on_press:
+      then:
+        - light.toggle: lrrgb_light
