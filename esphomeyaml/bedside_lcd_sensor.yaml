@@ -1,0 +1,55 @@
+esphomeyaml:
+  name: bedside_lcd_sensor
+  platform: ESP8266
+  board: nodemcuv2
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_pass
+
+mqtt:
+  broker: !secret mqtt_host
+  username: 'bedside_lcd_sensor'
+  password: !secret mqtt_pass
+
+# Enable logging
+logger:
+
+ota:
+
+i2c:
+  sda: GPIO4
+  scl: GPIO5
+  scan: False
+
+sensor:
+  - platform: htu21d
+    temperature:
+      name: "Bedroom Temperature"
+      id: htu21d_temp
+    humidity:
+      name: "Bedroom Humidity"
+      id: htu21d_hum
+    update_interval: 15s
+
+font:
+  - file: "Roboto-Regular.ttf"
+    id: roboto20
+    size: 20
+  - file: "Roboto-Regular.ttf"
+    id: roboto40
+    size: 40
+    
+time:
+  - platform: sntp
+    id: sntp_time
+
+display:
+  - platform: ssd1306_i2c
+    model: "SSD1306 128x64"
+    reset_pin: GPIO14
+    address: 0x3C
+    lambda: |-
+      it.strftime(0, 0, id(roboto40), "%H:%M", id(sntp_time).now());
+
+#it.printf(0, 0, id(roboto20), "%.1f°C %.1f%%", id(htu21d_temp).state);
