@@ -1,0 +1,47 @@
+esphome:
+  name: bedroom_sensor_node
+  platform: ESP8266
+  board: nodemcuv2
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_pass
+
+mqtt:
+  broker: !secret mqtt_host
+  username: 'bedroom_sensor_node'
+  password: !secret mqtt_pass
+
+# Enable logging
+logger:
+
+ota:
+
+i2c:
+  sda: GPIO4
+  scl: GPIO5
+  scan: False
+
+sensor:
+  - platform: htu21d
+    temperature:
+      name: "Bedroom Temperature"
+      id: htu21d_temp
+    humidity:
+      name: "Bedroom Humidity"
+      id: htu21d_hum
+    update_interval: 60s
+  - platform: adc
+    pin: A0
+    name: "Sound level"
+    update_interval: 15s
+    filters:
+      multiply: 3.3
+    
+binary_sensor:
+  - platform: gpio
+    pin: D3
+    name: "Sound trigger"
+    device_class: sound
+    filters:
+      delayed_off: 1s
