@@ -1,0 +1,29 @@
+esphome:
+  name: oldsensor
+  platform: ESP8266
+  board: esp01_1m
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_pass
+
+mqtt:
+  broker: !secret mqtt_host
+  username: 'oldsensor'
+  password: !secret mqtt_pass
+
+# Enable logging
+logger:
+
+sensor:
+  - platform: dht
+    pin: 14
+    temperature:
+      name: "AM2302 Temperature"
+    humidity:
+      name: "AM2302 Humidity"
+    model: AM2302
+  - platform: adc
+    pin: A0
+    name: "Analog LDR"
+
