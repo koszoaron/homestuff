@@ -1,4 +1,4 @@
-esphomeyaml:
+esphome:
   name: lr_rgbstrip
   platform: ESP8266
   board: esp01_1m
@@ -7,7 +7,7 @@ wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_pass
 
-ota:
+#ota:
 
 mqtt:
   broker: !secret mqtt_host
