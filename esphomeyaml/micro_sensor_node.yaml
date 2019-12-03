@@ -1,0 +1,42 @@
+esphome:
+  name: micro_sensor_node
+  platform: ESP8266
+  board: d1_mini
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_pass
+
+mqtt:
+  broker: !secret mqtt_host
+  username: 'micro_sensor_node'
+  password: !secret mqtt_pass
+
+# Enable logging
+logger:
+
+ota:
+
+i2c:
+  sda: GPIO4
+  scl: GPIO5
+  scan: False
+
+sensor:
+  - platform: bmp280
+    temperature:
+      name: "BMP280 Temperature"
+    pressure:
+      name: "BMP280 Pressure"
+    address: 0x76
+    update_interval: 60s
+  - platform: ultrasonic
+    trigger_pin: GPIO16
+    echo_pin: GPIO14
+    name: "Ultrasonic Sensor"
+
+binary_sensor:
+  - platform: gpio
+    pin: GPIO12
+    name: "PIR Sensor"
+    device_class: "motion"
