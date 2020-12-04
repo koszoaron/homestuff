@@ -1,0 +1,79 @@
+esphome: 
+  name: thermostat_byc17gh3
+  platform: ESP8266
+  board: esp12e
+  includes:
+    - ../floureon
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_pass
+  #  domain: ".lan"
+  use_address: 10.121.1.211
+  
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Thermostat BYC17GH3"
+    password: "bamO6JrM9ZSn"
+
+captive_portal:
+
+# Enable logging
+logger:
+#  level: WARN
+  level: VERBOSE
+#  level: VERY_VERBOSE
+  logs:
+    api.service: DEBUG
+  hardware_uart: UART1
+  esp8266_store_log_strings_in_flash: False
+
+# Enable Home Assistant API
+api:
+
+ota:
+
+i2c:
+  sda: 4
+  scl: 5
+  scan: True
+
+sensor:
+  - platform: sht3xd
+    address: 0x44
+    temperature:
+      name: "Thermostat Temperature"
+    humidity:
+      name: "Thermostat Humidity"
+  - platform: bh1750
+    name: "Thermostat Illuminance"
+    address: 0x23 #0x23 when ADDR is low, 0x53 when ADDR is high
+#    measurement_time: 69  #default is 69 which gives a range of 0->54612.5 lx    
+
+binary_sensor:
+  - platform: gpio
+    pin: 13
+    name: "Thermostat Relay"
+    id: thermostat_relay
+    device_class: heat
+
+uart:
+  tx_pin: 1
+  rx_pin: 3
+  baud_rate: 9600
+  id: uart_bus
+
+time:
+  platform: homeassistant
+  id: homeassistant_time
+
+climate:
+  - platform: custom
+    lambda: |-
+      auto my_thermostat = new FloureonThermostat(id(uart_bus));
+      my_thermostat->set_time_identifier(homeassistant_time);
+      my_thermostat->set_relay_identifier(thermostat_relay);
+      App.register_component(my_thermostat);
+      return {my_thermostat};
+    climates:
+      - name: "Floureon Thermostat"
