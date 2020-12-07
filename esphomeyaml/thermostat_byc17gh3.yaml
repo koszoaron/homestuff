@@ -48,7 +48,23 @@ sensor:
   - platform: bh1750
     name: "Thermostat Illuminance"
     address: 0x23 #0x23 when ADDR is low, 0x53 when ADDR is high
-#    measurement_time: 69  #default is 69 which gives a range of 0->54612.5 lx    
+#    measurement_time: 69  #default is 69 which gives a range of 0->54612.5 lx
+  - platform: custom
+    lambda: |-
+      auto my_int_temp_sensor = new FloureonTemperatureSensor();
+      App.register_component(my_int_temp_sensor);
+      return {my_int_temp_sensor};
+    sensors:
+      name: "Internal Temperature"
+      id: internal_temperature_sensor
+  - platform: custom
+    lambda: |-
+      auto my_ext_temp_sensor = new FloureonTemperatureSensor();
+      App.register_component(my_ext_temp_sensor);
+      return {my_ext_temp_sensor};
+    sensors:
+      name: "External Temperature"
+      id: external_temperature_sensor
 
 binary_sensor:
   - platform: gpio
@@ -73,6 +89,8 @@ climate:
       auto my_thermostat = new FloureonThermostat(id(uart_bus));
       my_thermostat->set_time_identifier(homeassistant_time);
       my_thermostat->set_relay_identifier(thermostat_relay);
+      my_thermostat->set_internal_temp_identifier(internal_temperature_sensor);
+      my_thermostat->set_external_temp_identifier(external_temperature_sensor);
       App.register_component(my_thermostat);
       return {my_thermostat};
     climates:

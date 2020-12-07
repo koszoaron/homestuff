@@ -3,7 +3,6 @@
 #include "esphome/core/helpers.h"
 
 namespace esphome {
-//namespace floureon {
 
 static const char *TAG = "floureon";
 static const uint8_t MESSAGE_SIZE = 16;
@@ -240,6 +239,18 @@ void FloureonThermostat::handle_message_(const uint8_t *buffer, size_t len) {
                 update = true;
             }
 
+            /* update the internal sensor value (if exists) */
+            if (this->internal_temp_id_.has_value()) {
+                auto int_temp_id = *this->internal_temp_id_;
+                int_temp_id->publish_state(settings1_temperature_internal_ / 10.0f);
+            }
+
+            /* update the external sensor value (if exists) */
+            if (this->external_temp_id_.has_value()) {
+                auto ext_temp_id = *this->external_temp_id_;
+                ext_temp_id->publish_state(settings1_temperature_external_ / 10.0f);
+            }
+
             ESP_LOGV(TAG, "Command: SETTINGS1, WiFi State: %#04x, T_int: %1.1f, T_ext: %1.1f, T_set: %1.1f, Lock: %s, Manual: %s, Power: %s",
                 (uint8_t)settings1_wifi_state_,
                 settings1_temperature_internal_ / 10.0f,
@@ -366,5 +377,4 @@ void FloureonThermostat::control(const climate::ClimateCall &call) {
     this->publish_state();
 }
 
-//}  // namespace floureon
 }  // namespace esphome

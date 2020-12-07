@@ -9,7 +9,6 @@
 #include "esphome/components/sensor/sensor.h"
 
 namespace esphome {
-//namespace floureon {
 
 static const uint32_t SEND_DELAY_MS = 10000;
 static const uint32_t FIRST_DELAY_MS = 500;
@@ -78,6 +77,8 @@ class FloureonThermostat : public Component, public uart::UARTDevice, public cli
     void loop() override;
     void set_time_identifier(time::RealTimeClock *time_id) { this->time_id_ = time_id; }
     void set_relay_identifier(binary_sensor::BinarySensor *relay_id) { this->relay_id_ = relay_id; };
+    void set_internal_temp_identifier(sensor::Sensor *internal_temp_id) { this->internal_temp_id_ = internal_temp_id; };
+    void set_external_temp_identifier(sensor::Sensor *external_temp_id) { this->external_temp_id_ = external_temp_id; };
 
   protected:
     void send_message_(uint8_t *data, uint8_t length);
@@ -90,6 +91,8 @@ class FloureonThermostat : public Component, public uart::UARTDevice, public cli
     std::vector<uint8_t> rx_message_;
     optional<time::RealTimeClock *> time_id_{};
     optional<binary_sensor::BinarySensor *> relay_id_{};
+    optional<sensor::Sensor *> internal_temp_id_{};
+    optional<sensor::Sensor *> external_temp_id_{};
 
   private:
     uint32_t time_next_send_;
@@ -114,5 +117,4 @@ class FloureonThermostat : public Component, public uart::UARTDevice, public cli
     bool relay_state_;
 };
 
-//}  // namespace floureon
 }  // namespace esphome
