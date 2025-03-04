@@ -4,6 +4,13 @@ This directory contains current and older (archived) ESPHome device configuratio
 
 ## Contents
 
+### btzb-eth-bridge
+Bluetooth and Zigbee to Ethernet bridge. Runs on a WT32-ETH01 board, uses the bluetooth_proxy and [stream_server](https://github.com/tube0013/esphome-stream-server-v2).
+
+### esp8266-matrixclock
+MAX7219 based digital clock on a NodeMCU v2 (ESP8266) board. Uses a DS1307 RTC for timekeeping and restoring time at startup. SNTP is used as the main time source.
+A BH1750 module provides light sensing, but dynamic brightness control is not implemented yet.
+
 ### TODO
 placeholder
 

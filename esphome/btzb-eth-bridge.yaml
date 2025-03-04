@@ -1,0 +1,58 @@
+esphome:
+  name: btzb-eth-bridge
+  friendly_name: btzb_eth_bridge
+
+esp32:
+  board: esp-wrover-kit
+  framework:
+    type: arduino
+
+external_components:
+  - source: github://tube0013/esphome-stream-server-v2
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret api_encryption_key
+  reboot_timeout: 0s
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+ethernet:
+  type: LAN8720
+  mdc_pin: GPIO23
+  mdio_pin: GPIO18
+  clk_mode: GPIO0_IN
+  phy_addr: 1
+  power_pin: GPIO16
+  use_address: 10.121.3.120
+
+esp32_ble_tracker:
+  scan_parameters:
+    interval: 1100ms
+    window: 1100ms
+#    active: true
+
+bluetooth_proxy:
+#  active: true
+
+uart:
+  id: uart_bus
+  rx_pin: GPIO17
+  tx_pin: GPIO5
+  baud_rate: 57600
+
+stream_server:
+  uart_id: uart_bus
+  id: ss
+  port: 6638 # optional, default is 6638
+
+binary_sensor:
+  - platform: stream_server
+    stream_server: ss
+    name: "BTZB Serial Connected"

@@ -1,0 +1,91 @@
+esphome:
+  name: esp8266-matrixclock
+  friendly_name: esp8266_matrixclock
+  on_boot:
+    then:
+      # read the RTC time once when the system boots
+      ds1307.read_time:
+
+esp8266:
+  board: nodemcuv2
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  use_address: 10.121.3.119
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Esp8266-Matrixclock"
+
+captive_portal:
+    
+font:
+  - file: "fonts/5x7_MT_Pixel.ttf"
+    id: digit_font8
+    size: 7
+    glyphs:
+      [':', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
+
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: Europe/Budapest
+    servers: !secret ntp_server_ip
+    on_time_sync: 
+      then:
+        - ds1307.write_time            
+  - platform: ds1307
+    # repeated synchronization is not necessary unless the external RTC
+    # is much more accurate than the internal clock
+    update_interval: never
+
+number:
+  - platform: template
+    name: "Brightness"
+    id: intensity
+    optimistic: true
+    min_value: 0
+    max_value: 15
+    step: 1
+    
+spi:
+  clk_pin: 14
+  mosi_pin: 13
+
+i2c:
+  sda: 4
+  scl: 5 
+
+display:
+  - platform: max7219digit
+    cs_pin: 15
+    num_chips: 4
+    intensity: 0
+    scroll_enable: False
+#      it.strftime(3, 0, id(digit_font8), "%H", id(sntp_time).now());
+#      it.print(15, 0, id(digit_font8), ":");
+#      it.strftime(18, 0, id(digit_font8), "%M", id(sntp_time).now());
+    lambda: |-
+      it.strftime(3, 0, id(digit_font8), "%H", id(sntp_time).now());
+      it.print(16, 0, id(digit_font8), ":");
+      it.strftime(18, 0, id(digit_font8), "%M", id(sntp_time).now());
+      it.intensity(id(intensity).state); 
+
+sensor:
+  - platform: bh1750
+    name: Illuminance
+    address: 0x23  #0x23 when ADDR is low, 0x53 when ADDR is high
+    #measurement_duration: 69  #default is 69 which gives a range of 0->54612.5 lx
