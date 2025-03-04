@@ -1,0 +1,54 @@
+esphome:
+  name: vindriktning
+  friendly_name: vindriktning
+
+esp8266:
+  board: esp07s
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  use_address: 10.121.3.106
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Vindriktning Fallback Hotspot"
+
+captive_portal:
+
+uart:
+  rx_pin: 12
+  baud_rate: 9600
+  
+i2c:
+  sda: 4
+  scl: 5
+  scan: True
+  frequency: 100kHz
+
+sensor:
+  - platform: pm1006
+    pm_2_5:
+      name: PM2.5
+  - platform: bh1750
+    name: Illuminance
+    address: 0x23  #0x23 when ADDR is low, 0x53 when ADDR is high
+    #measurement_duration: 69  #default is 69 which gives a range of 0->54612.5 lx
+  - platform: sht3xd
+    temperature:
+      name: Temperature
+    humidity:
+      name: Humidity
+    address: 0x44

@@ -1,0 +1,184 @@
+esphome:
+  name: h801-dollhouse
+  friendly_name: h801_dollhouse
+
+esp8266:
+  board: esp01_1m
+
+# Enable logging
+logger:
+  baud_rate: 0
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret api_encryption_key
+  reboot_timeout: 0s
+
+ota:
+  - platform: esphome
+    id: my_ota
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  reboot_timeout: 0s
+  use_address: 10.121.3.105
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "H801-Dollhouse Fallback Hotspot"
+
+captive_portal:
+
+output:
+  - platform: esp8266_pwm
+    pin: 12
+    frequency: 1000 Hz
+    id: pwm_b
+  - platform: esp8266_pwm
+    pin: 13
+    frequency: 1000 Hz
+    id: pwm_g
+  - platform: esp8266_pwm
+    pin: 15
+    frequency: 1000 Hz
+    id: pwm_r
+  - platform: esp8266_pwm
+    pin: 14
+    frequency: 1000 Hz
+    id: pwm_w1
+  - platform: esp8266_pwm
+    pin: 4
+    frequency: 1000 Hz
+    id: pwm_w2
+
+light:
+  - platform: rgb
+    name: "Dollhouse RGB"
+    id: dh_rgb
+    red: pwm_r
+    green: pwm_g
+    blue: pwm_b
+
+status_led:
+  pin:
+    number: 5
+    inverted: True
+
+remote_receiver:
+  pin:
+    number: 2
+    inverted: True
+  dump: pioneer
+  on_pioneer: 
+    then:
+      - lambda: |-
+          switch (x.rc_code_1)
+          {
+            case 0x0000:
+              ESP_LOGD("main", "Brightness up");
+              {
+                float cur;
+                id(dh_rgb).remote_values.as_brightness(&cur);
+                float bri = clamp(cur + 0.1f, 0.0f, 1.0f);
+                id(dh_rgb).make_call().set_brightness(bri).set_state(bri != 0.0f).perform();
+              }
+              break;
+            case 0x0002:
+              ESP_LOGD("main", "Brightness down");
+              {
+                float cur;
+                id(dh_rgb).remote_values.as_brightness(&cur);
+                float bri = clamp(cur - 0.1f, 0.0f, 1.0f);
+                id(dh_rgb).make_call().set_brightness(bri).set_state(bri != 0.0f).perform();
+              }
+              break;
+            case 0x0003:
+              ESP_LOGD("main", "W");
+              break;
+            case 0x0006:
+              ESP_LOGD("main", "Off");
+              id(dh_rgb).turn_off().perform();
+              break;
+            case 0x0007:
+              ESP_LOGD("main", "On");
+              id(dh_rgb).turn_on().perform();
+              break;
+            case 0x0008:
+              ESP_LOGD("main", "R");
+              id(dh_rgb).turn_on().set_rgb(1.0, 0.0, 0.0).perform();
+              break;
+            case 0x0009:
+              ESP_LOGD("main", "G");
+              id(dh_rgb).turn_on().set_rgb(0.0, 1.0, 0.0).perform();
+              break;
+            case 0x000A:
+              ESP_LOGD("main", "B");
+              id(dh_rgb).turn_on().set_rgb(0.0, 0.0, 1.0).perform();
+              break;
+            case 0x000C:
+              ESP_LOGD("main", "R1");
+              id(dh_rgb).turn_on().set_rgb(1.0, 0.3, 0.0).perform();
+              break;
+            case 0x000D:
+              ESP_LOGD("main", "G1");
+              id(dh_rgb).turn_on().set_rgb(0.0, 1.0, 0.3).perform();
+              break;
+            case 0x000E:
+              ESP_LOGD("main", "B1");
+              id(dh_rgb).turn_on().set_rgb(0.0, 1.0, 1.0).perform();
+              break;
+            case 0x000F:
+              ESP_LOGD("main", "Flash");
+              break;
+            case 0x0010:
+              ESP_LOGD("main", "R2");
+              id(dh_rgb).turn_on().set_rgb(1.0, 0.5, 0.0).perform();
+              break;
+            case 0x0011:
+              ESP_LOGD("main", "G2");
+              id(dh_rgb).turn_on().set_rgb(0.0, 1.0, 0.6).perform();
+              break;
+            case 0x0012:
+              ESP_LOGD("main", "B2");
+              id(dh_rgb).turn_on().set_rgb(1.0, 0.0, 0.8).perform();
+              break;
+            case 0x0013:
+              ESP_LOGD("main", "Strobe");
+              break;
+            case 0x0014:
+              ESP_LOGD("main", "R3");  // orange
+              id(dh_rgb).turn_on().set_rgb(1.0, 0.6, 0.0).perform();
+              break;
+            case 0x0015:
+              ESP_LOGD("main", "G3");
+              id(dh_rgb).turn_on().set_rgb(0.0, 0.7, 1.0).perform();
+              break;
+            case 0x0016:
+              ESP_LOGD("main", "B3");
+              id(dh_rgb).turn_on().set_rgb(1.0, 0.0, 0.6).perform();
+              break;
+            case 0x0017:
+              ESP_LOGD("main", "Smooth");
+              break;
+            case 0x0018:
+              ESP_LOGD("main", "R4");  // yellow
+              id(dh_rgb).turn_on().set_rgb(1.0, 0.75, 0.0).perform();
+              break;
+            case 0x0019:
+              ESP_LOGD("main", "G4");
+              id(dh_rgb).turn_on().set_rgb(0.0, 0.5, 1.0).perform();
+              break;
+            case 0x001A:
+              ESP_LOGD("main", "B4");  // magenta
+              id(dh_rgb).turn_on().set_rgb(1.0, 0.0, 0.4).perform();
+              break;
+            case 0x001B:
+              ESP_LOGD("main", "Mode");
+              break;
+            default:
+              ESP_LOGD("main", "Unknown");
+              break;
+          }

@@ -11,8 +11,11 @@ Bluetooth and Zigbee to Ethernet bridge. Runs on a WT32-ETH01 board, uses the bl
 MAX7219 based digital clock on a NodeMCU v2 (ESP8266) board. Uses a DS1307 RTC for timekeeping and restoring time at startup. SNTP is used as the main time source.
 A BH1750 module provides light sensing, but dynamic brightness control is not implemented yet.
 
-### TODO
-placeholder
+### h801-dollhouse
+H801 RGBWW driver based lighting solution for the children's doll house. An IR remote controller from a cheap RGBW bulb bundle, transmitting Pioneer codes, controls the color of the light strip. Only RGB outputs are used at this time.
+
+### vindriktning
+ESP07S module inserted into an Ikea Vindriktning sensor. Additional BH1750 and SHT3xD modules connected for light, temperature and humidity measurements.
 
 ### Archive
 * bedroom_sensor_node - ESP8266 and HTU21D based sensor node. Has an additional analog and digital input for a microphone module that never worked. Uses MQTT instead of the native API.
