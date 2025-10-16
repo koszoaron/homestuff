@@ -468,7 +468,6 @@ text:
 
 matrix_keypad:
   id: front_panel_keys
-  #device_id: marantz_cd36
   rows:  # outputs
     - pin: GPIO25
     - pin: GPIO26
@@ -513,7 +512,6 @@ font:
 
 display:
   - platform: ssd1322_spi
-    #device_id: marantz_cd36
     model: "SSD1322 256x64"
     reset_pin: GPIO32
     cs_pin: GPIO5
@@ -523,8 +521,6 @@ display:
 
 #wired IR TX (Pioneer) for tape deck control + optional receiver via Denon input
   #device_id: pioneer_ctw620r
-#matrix keypad for CD player (CD-36) keys (11)
-  #device_id: marantz_cd36
 #LCD/OLED display in CD-36
   #device_id: marantz_cd36
 #[optional] IR receiver in CD-36
