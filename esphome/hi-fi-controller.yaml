@@ -160,6 +160,17 @@ switch:
       data: "Z1ON"
     command_off:
       data: "Z1OFF"
+  - platform: template
+    id: display_power
+    name: "Display Power"
+    icon: "mdi:monitor"
+    device_id: marantz_cd36
+    optimistic: True
+    turn_on_action: 
+      - lambda: "ssd1322_oled->turn_on();"
+    turn_off_action: 
+      - lambda: "ssd1322_oled->turn_off();"
+    restore_mode: ALWAYS_ON
     
 select:
   - platform: uartex
@@ -466,6 +477,21 @@ text:
       c.data.insert(c.data.end(), str.begin(), str.end());
       return c;
 
+number:
+  - platform: template
+    id: display_brightness
+    name: "Display Brightness"
+    icon: "mdi:brightness-percent"
+    device_id: marantz_cd36
+    min_value: 0
+    max_value: 100
+    step: 1
+    optimistic: True
+    initial_value: 10
+    set_action: 
+      then:
+        - lambda: "ssd1322_oled->set_brightness(x / 100.0f);"
+
 matrix_keypad:
   id: front_panel_keys
   rows:  # outputs
@@ -512,10 +538,12 @@ font:
 
 display:
   - platform: ssd1322_spi
+    id: ssd1322_oled
     model: "SSD1322 256x64"
     reset_pin: GPIO32
     cs_pin: GPIO5
     dc_pin: GPIO33
+    brightness: 0.1
     lambda: |-
       it.print(0, 0, id(digit_font8), "HELLO WORLD!");
 
