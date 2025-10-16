@@ -3,7 +3,7 @@ esphome:
   friendly_name: Hi-Fi Controller
 
 esp32:
-  board: esp32dev
+  board: esp32dev  #https://grobotronics.com/images/companies/1/71kEWzr29bL._AC_SL1001_.jpg
   framework:
     type: arduino
 
@@ -430,6 +430,23 @@ text:
       c.data.insert(c.data.end(), str.begin(), str.end());
       return c;
 
+spi:
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+
+font:
+  - file: "fonts/5x7_MT_Pixel.ttf"
+    id: digit_font8
+    size: 7
+
+display:
+  - platform: ssd1322_spi
+    model: "SSD1322 256x64"
+    reset_pin: GPIO32
+    cs_pin: GPIO5
+    dc_pin: GPIO33
+    lambda: |-
+      it.print(0, 0, id(digit_font8), "HELLO WORLD!");
 
 #wired IR TX (Pioneer) for tape deck control + optional receiver via Denon input
 #matrix keypad for CD player (CD-36) keys (11)
