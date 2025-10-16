@@ -452,6 +452,7 @@ text_sensor:
   - platform: template
     id: last_key_pressed
     name: "Last Key Pressed"
+    icon: "mdi:keyboard"
     device_id: marantz_cd36
 
 text:
