@@ -449,6 +449,10 @@ text_sensor:
       return std::string(reinterpret_cast<const char*>(data + 2), (len - 2));
     command_update:
       data: "TP?"
+  - platform: template
+    id: last_key_pressed
+    name: "Last Key Pressed"
+    device_id: marantz_cd36
 
 text:
   - platform: uartex
@@ -475,6 +479,27 @@ matrix_keypad:
     - pin: GPIO35
     - pin: GPIO14
     - pin: GPIO12
+  keys: "0123456789AB"  # Pause, Play/Replay, Repeat, Shuffle; Previous, Open/Close, Stop/CP, Time; -, Program, Next, Peak Search/Fader
+  on_key:
+    - text_sensor.template.publish:
+        id: last_key_pressed
+        state: !lambda |-
+          switch (x)
+          {
+            case '0': return std::string("Pause");
+            case '1': return std::string("Play/Replay");
+            case '2': return std::string("Repeat");
+            case '3': return std::string("Shuffle");
+            case '4': return std::string("Previous");
+            case '5': return std::string("Open/Close");
+            case '6': return std::string("Stop/CP");
+            case '7': return std::string("Time");
+            // '8' missing on purpose
+            case '9': return std::string("Program");
+            case 'A': return std::string("Next");
+            case 'B': return std::string("Peak Search/Fader");
+            default: return std::string("Unknown");
+          }
 
 spi:
   clk_pin: GPIO18
