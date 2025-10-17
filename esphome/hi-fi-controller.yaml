@@ -111,6 +111,7 @@ switch:
     name: "Main Zone"
     icon: "mdi:alpha-m-circle-outline"
     device_id: denon_avr3805
+    id: "mapwr"
     restore_mode: DISABLED
     state:
       data: "ZM"
@@ -130,6 +131,7 @@ switch:
     name: "Zone 2 Power"
     icon: "mdi:numeric-2-circle-outline"
     device_id: denon_avr3805
+    id: "z2pwr"
     restore_mode: DISABLED
     state:
       data: "Z2"
@@ -147,6 +149,7 @@ switch:
     name: "Zone 3 Power"
     icon: "mdi:numeric-3-circle-outline"
     device_id: denon_avr3805
+    id: "z3pwr"
     restore_mode: DISABLED
     state:
       data: "Z1"
@@ -177,6 +180,7 @@ select:
     name: "Input Source"
     icon: "mdi:audio-input-stereo-minijack"
     device_id: denon_avr3805
+    id: "masrc"
     state:
       data: "SI"
     options:
@@ -203,6 +207,7 @@ select:
     name: "Zone 2 Input"
     icon: "mdi:audio-input-rca"
     device_id: denon_avr3805
+    id: "z2src"
     state:
       data: "Z2"
     options:
@@ -242,6 +247,7 @@ select:
     name: "Zone 3 Input"
     icon: "mdi:video-input-component"
     device_id: denon_avr3805
+    id: "z3src"
     state:
       data: "Z1"
     options:
@@ -310,6 +316,7 @@ sensor:
     name: "Master Volume"
     icon: "mdi:volume-high"
     device_id: denon_avr3805
+    id: "mavol"
     accuracy_decimals: 1
     unit_of_measurement: "dB"
     state:
@@ -526,15 +533,32 @@ matrix_keypad:
             case 'B': return std::string("Peak Search/Fader");
             default: return std::string("Unknown");
           }
+    - lambda: |-
+        if (x == '9')
+        {
+          id(ssd1322_oled).show_next_page();
+        }
 
 spi:
   clk_pin: GPIO18
   mosi_pin: GPIO23
 
 font:
-  - file: "fonts/5x7_MT_Pixel.ttf"
-    id: digit_font8
-    size: 7
+  - file: "fonts/segment-digital-vfd.otf"
+    id: segment_digital_vfd_16
+    size: 16
+  - file: "fonts/Roboto-Regular.ttf"
+    id: roboto_regular_10
+    size: 10
+  - file: "fonts/Roboto-Regular.ttf"
+    id: roboto_regular_12
+    size: 12
+
+image:
+  - file: "mdi:music"
+    id: music_icon
+    type: BINARY
+    resize: 32x32
 
 display:
   - platform: ssd1322_spi
@@ -544,13 +568,35 @@ display:
     cs_pin: GPIO5
     dc_pin: GPIO33
     brightness: 0.1
-    lambda: |-
-      it.print(0, 0, id(digit_font8), "HELLO WORLD!");
+    pages: 
+      - id: page_mediainfo
+        lambda: |-
+          //it.rectangle(0, 0, 256, 64);
+          it.rectangle(8, 8, 48, 48);
+          it.image(16, 16, id(music_icon));
+          //it.line(60, 21, 250, 21);
+          //it.line(60, 42, 250, 42);
+          it.print(64, 4, id(roboto_regular_12), "<< Title >>");
+          it.print(64, 24, id(roboto_regular_12), "<< Artist >>");
+          it.print(64, 44, id(roboto_regular_12), "<< Album >>");
+      - id: page_zoneinfo
+        lambda: |-
+          //it.rectangle(4, 0, 252, 64);
+          it.print(4, 1, id(roboto_regular_10), "ZONE1:");
+          it.print(4, 21, id(roboto_regular_10), "ZONE2:");
+          it.print(4, 41, id(roboto_regular_10), "ZONE3:");
+          it.printf(42, 4, id(segment_digital_vfd_16), "%s", id(mapwr).state ? id(masrc).state.c_str() : "OFF");
+          it.printf(42, 24, id(segment_digital_vfd_16), "%s", id(z2pwr).state ? id(z2src).state.c_str() : "OFF");
+          it.printf(42, 44, id(segment_digital_vfd_16), "%s", id(z3pwr).state ? id(z3src).state.c_str() : "OFF");
+          it.printf((it.get_width() - 16), 4, id(segment_digital_vfd_16), TextAlign::TOP_RIGHT, id(mapwr).state ? "%.1f" : "", id(mavol).state);
+          it.printf((it.get_width() - 16), 24, id(segment_digital_vfd_16), TextAlign::TOP_RIGHT, id(z2pwr).state ? "%.1f" : "", id(z2vol).state);
+          it.printf((it.get_width() - 16), 44, id(segment_digital_vfd_16), TextAlign::TOP_RIGHT, id(z3pwr).state ? "%.1f" : "", id(z3vol).state);
+          it.print((it.get_width() - 4), 8, id(roboto_regular_10), TextAlign::TOP_RIGHT, id(mapwr).state ? "dB" : "");
+          it.print((it.get_width() - 4), 28, id(roboto_regular_10), TextAlign::TOP_RIGHT, id(z2pwr).state ? "dB" : "");
+          it.print((it.get_width() - 4), 48, id(roboto_regular_10), TextAlign::TOP_RIGHT, id(z3pwr).state ? "dB" : "");
 
 #wired IR TX (Pioneer) for tape deck control + optional receiver via Denon input
   #device_id: pioneer_ctw620r
-#LCD/OLED display in CD-36
-  #device_id: marantz_cd36
 #[optional] IR receiver in CD-36
   #device_id: marantz_cd36
 #[optional] UART interface reservation for BT audio receiver interface
