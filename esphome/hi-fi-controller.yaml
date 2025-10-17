@@ -491,7 +491,6 @@ text:
     optimistic: True
     initial_value: "<< Title >>"
     mode: TEXT
-    max_length: 25
   - platform: template
     id: "txtL1"
     name: "Text Line 1"
@@ -500,7 +499,6 @@ text:
     optimistic: True
     initial_value: "<< Artist >>"
     mode: TEXT
-    max_length: 25
   - platform: template
     id: "txtL2"
     name: "Text Line 2"
@@ -509,7 +507,6 @@ text:
     optimistic: True
     initial_value: "<< Album >>"
     mode: TEXT
-    max_length: 25
 
 number:
   - platform: template
