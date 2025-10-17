@@ -88,6 +88,10 @@ switch:
       data: "PWSTANDBY"
     command_update:
       data: "PW?"
+    on_turn_on:
+      - lambda: "id(ssd1322_oled).turn_on();"
+    on_turn_off:
+      - lambda: "id(ssd1322_oled).turn_off();"
   - platform: uartex
     name: "Muting"
     icon: "mdi:volume-mute"
