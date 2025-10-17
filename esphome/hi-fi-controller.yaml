@@ -170,9 +170,9 @@ switch:
     device_id: marantz_cd36
     optimistic: True
     turn_on_action: 
-      - lambda: "ssd1322_oled->turn_on();"
+      - lambda: "id(ssd1322_oled).turn_on();"
     turn_off_action: 
-      - lambda: "ssd1322_oled->turn_off();"
+      - lambda: "id(ssd1322_oled).turn_off();"
     restore_mode: ALWAYS_ON
     
 select:
@@ -521,7 +521,7 @@ number:
     initial_value: 10
     set_action: 
       then:
-        - lambda: "ssd1322_oled->set_brightness(x / 100.0f);"
+        - lambda: "id(ssd1322_oled).set_brightness(x / 100.0f);"
 
 matrix_keypad:
   id: front_panel_keys
@@ -561,6 +561,17 @@ matrix_keypad:
         if (x == '9')
         {
           id(ssd1322_oled).show_next_page();
+        }
+        else if (x == 'B')
+        {
+          if (id(ssd1322_oled).is_on())
+          {
+            id(ssd1322_oled).turn_off();
+          }
+          else
+          {
+            id(ssd1322_oled).turn_on();
+          }
         }
 
 spi:
