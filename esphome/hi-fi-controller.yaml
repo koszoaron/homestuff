@@ -483,6 +483,33 @@ text:
       cmd_t c = { {'T', 'P'} };
       c.data.insert(c.data.end(), str.begin(), str.end());
       return c;
+  - platform: template
+    id: "txtL0"
+    name: "Text Line 0"
+    icon: "mdi:text"
+    device_id: marantz_cd36
+    optimistic: True
+    initial_value: "<< Title >>"
+    mode: TEXT
+    max_length: 25
+  - platform: template
+    id: "txtL1"
+    name: "Text Line 1"
+    icon: "mdi:text"
+    device_id: marantz_cd36
+    optimistic: True
+    initial_value: "<< Artist >>"
+    mode: TEXT
+    max_length: 25
+  - platform: template
+    id: "txtL2"
+    name: "Text Line 2"
+    icon: "mdi:text"
+    device_id: marantz_cd36
+    optimistic: True
+    initial_value: "<< Album >>"
+    mode: TEXT
+    max_length: 25
 
 number:
   - platform: template
@@ -576,9 +603,9 @@ display:
           it.image(16, 16, id(music_icon));
           //it.line(60, 21, 250, 21);
           //it.line(60, 42, 250, 42);
-          it.print(64, 4, id(roboto_regular_12), "<< Title >>");
-          it.print(64, 24, id(roboto_regular_12), "<< Artist >>");
-          it.print(64, 44, id(roboto_regular_12), "<< Album >>");
+          it.printf(64, 4, id(roboto_regular_12), "%s", id(txtL0).state.c_str());  //cca 25 characters can be displayed
+          it.printf(64, 24, id(roboto_regular_12), "%s", id(txtL1).state.c_str());
+          it.printf(64, 44, id(roboto_regular_12), "%s", id(txtL2).state.c_str());
       - id: page_zoneinfo
         lambda: |-
           //it.rectangle(4, 0, 252, 64);
