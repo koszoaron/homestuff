@@ -527,6 +527,15 @@ number:
       then:
         - lambda: "id(ssd1322_oled).set_brightness(x / 100.0f);"
 
+event:
+  - platform: template
+    id: front_panel_keypress
+    name: "Keypress Event"
+    device_id: marantz_cd36
+    event_types: 
+      - "keypress"
+    device_class: button
+
 matrix_keypad:
   id: front_panel_keys
   rows:  # outputs
@@ -577,6 +586,9 @@ matrix_keypad:
             id(ssd1322_oled).turn_on();
           }
         }
+    - event.trigger: 
+        id: front_panel_keypress
+        event_type: "keypress"
 
 spi:
   clk_pin: GPIO18
@@ -592,6 +604,7 @@ font:
   - file: "fonts/Roboto-Regular.ttf"
     id: roboto_regular_12
     size: 12
+    glyphsets: GF_Latin_Core 
 
 image:
   - file: "mdi:music"
