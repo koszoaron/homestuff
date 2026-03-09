@@ -49,6 +49,12 @@ wifi:
 
 captive_portal:
 
+remote_transmitter:
+  pin: 
+    number: GPIO13
+    inverted: False
+  carrier_duty_percent: 100%  # use 100% duty cycle because SR-Link is a baseband wired signal
+
 uart:
   baud_rate: 9600
   rx_pin: GPIO16
@@ -431,6 +437,133 @@ button:
     device_id: denon_avr3805
     command_on:
       data: "Z1DOWN"
+  - platform: template
+    name: "Deck 2 Reverse Play"
+    icon: "mdi:menu-left-outline"
+    device_id: pioneer_ctw620r
+    on_press:
+      - remote_transmitter.transmit_pioneer:
+          rc_code_1: 0x8515  #21
+          repeat: 
+            times: 2
+  - platform: template
+    name: "Deck 2 Stop"
+    icon: "mdi:stop"
+    device_id: pioneer_ctw620r
+    on_press:
+      - remote_transmitter.transmit_pioneer:
+          rc_code_1: 0x8516  #22
+          repeat: 
+            times: 2
+  - platform: template
+    name: "Deck 2 Play"
+    icon: "mdi:play"
+    device_id: pioneer_ctw620r
+    on_press:
+      - remote_transmitter.transmit_pioneer:
+          rc_code_1: 0x8517  #23
+          repeat: 
+            times: 2
+  - platform: template
+    name: "Deck 2 Rewind"
+    icon: "mdi:rewind"
+    device_id: pioneer_ctw620r
+    on_press:
+      - remote_transmitter.transmit_pioneer:
+          rc_code_1: 0x8511  #17
+          repeat: 
+            times: 2
+  - platform: template
+    name: "Deck 2 Fast Forward"
+    icon: "mdi:fast-forward"
+    device_id: pioneer_ctw620r
+    on_press:
+      - remote_transmitter.transmit_pioneer:
+          rc_code_1: 0x8510  #16
+          repeat: 
+            times: 2
+  - platform: template
+    name: "Deck 2 Pause"
+    icon: "mdi:pause"
+    device_id: pioneer_ctw620r
+    on_press:
+      - remote_transmitter.transmit_pioneer:
+          rc_code_1: 0x8518  #24
+          repeat: 
+            times: 2
+  - platform: template
+    name: "Deck 2 Record"
+    icon: "mdi:record"
+    device_id: pioneer_ctw620r
+    disabled_by_default: True
+    on_press:
+      - remote_transmitter.transmit_pioneer:
+          rc_code_1: 0x8512  #18 or 20
+          repeat: 
+            times: 2
+  - platform: template
+    name: "Pioneer Deck Power"
+    icon: "mdi:power"
+    device_id: pioneer_ctw620r
+    on_press:
+      - remote_transmitter.transmit_pioneer:
+          rc_code_1: 0x851C  #28
+          repeat: 
+            times: 2
+  - platform: template
+    name: "Deck 1 Reverse Play"
+    icon: "mdi:menu-left-outline"
+    device_id: pioneer_ctw620r
+    on_press:
+      - remote_transmitter.transmit_pioneer:
+          rc_code_1: 0x855B  #91
+          repeat: 
+            times: 2
+  - platform: template
+    name: "Deck 1 Stop"
+    icon: "mdi:stop"
+    device_id: pioneer_ctw620r
+    on_press:
+      - remote_transmitter.transmit_pioneer:
+          rc_code_1: 0x855C  #92
+          repeat: 
+            times: 2
+  - platform: template
+    name: "Deck 1 Play"
+    icon: "mdi:play"
+    device_id: pioneer_ctw620r
+    on_press:
+      - remote_transmitter.transmit_pioneer:
+          rc_code_1: 0x855D  #93
+          repeat: 
+            times: 2
+  - platform: template
+    name: "Deck 1 Rewind"
+    icon: "mdi:rewind"
+    device_id: pioneer_ctw620r
+    on_press:
+      - remote_transmitter.transmit_pioneer:
+          rc_code_1: 0x8557  #87
+          repeat: 
+            times: 2
+  - platform: template
+    name: "Deck 1 Fast Forward"
+    icon: "mdi:fast-forward"
+    device_id: pioneer_ctw620r
+    on_press:
+      - remote_transmitter.transmit_pioneer:
+          rc_code_1: 0x8556  #86
+          repeat: 
+            times: 2
+  - platform: template
+    name: "Deck 1 Pause"
+    icon: "mdi:pause"
+    device_id: pioneer_ctw620r
+    on_press:
+      - remote_transmitter.transmit_pioneer:
+          rc_code_1: 0x855E  #94
+          repeat: 
+            times: 2
 
 text_sensor:
   - platform: uartex
@@ -647,8 +780,6 @@ display:
           it.print((it.get_width() - 4), 28, id(roboto_regular_10), TextAlign::TOP_RIGHT, id(z2pwr).state ? "dB" : "");
           it.print((it.get_width() - 4), 48, id(roboto_regular_10), TextAlign::TOP_RIGHT, id(z3pwr).state ? "dB" : "");
 
-#wired IR TX (Pioneer) for tape deck control + optional receiver via Denon input
-  #device_id: pioneer_ctw620r
 #[optional] IR receiver in CD-36
   #device_id: marantz_cd36
 #[optional] UART interface reservation for BT audio receiver interface
