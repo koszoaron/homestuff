@@ -533,7 +533,17 @@ button:
     disabled_by_default: True
     on_press:
       - remote_transmitter.transmit_pioneer:
-          rc_code_1: 0x8512  #18 or 20
+          rc_code_1: 0x8514  #20
+          repeat: 
+            times: 2
+  - platform: template
+    name: "Deck 2 Record Mute"
+    icon: "mdi:circle-outline"
+    device_id: pioneer_ctw620r
+    disabled_by_default: True
+    on_press:
+      - remote_transmitter.transmit_pioneer:
+          rc_code_1: 0x8512  #18
           repeat: 
             times: 2
   - platform: template
@@ -597,6 +607,22 @@ button:
     on_press:
       - remote_transmitter.transmit_pioneer:
           rc_code_1: 0x855E  #94
+          repeat: 
+            times: 2
+  - platform: template
+    name: "Counter Mode"
+    device_id: pioneer_ctw620r
+    on_press:
+      - remote_transmitter.transmit_pioneer:
+          rc_code_1: 0x8547  #71
+          repeat: 
+            times: 2
+  - platform: template
+    name: "Counter Reset"
+    device_id: pioneer_ctw620r
+    on_press:
+      - remote_transmitter.transmit_pioneer:
+          rc_code_1: 0x8548  #72
           repeat: 
             times: 2
 
