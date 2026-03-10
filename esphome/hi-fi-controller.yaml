@@ -665,11 +665,6 @@ text_sensor:
       return std::string(reinterpret_cast<const char*>(data + 2), (len - 2));
     command_update:
       data: "TP?"
-  - platform: template
-    id: last_key_pressed
-    name: "Last Key Pressed"
-    icon: "mdi:keyboard"
-    device_id: marantz_cd36
 
 text:
   - platform: uartex
@@ -727,7 +722,18 @@ event:
     name: "Keypress Event"
     device_id: marantz_cd36
     event_types: 
-      - "keypress"
+      - "key_pause"
+      - "key_play"
+      - "key_repeat"
+      - "key_shuffle"
+      - "key_previous"
+      - "key_openclose"
+      - "key_stop"
+      - "key_time"
+      - "key_program"
+      - "key_next"
+      - "key_peaksearch_fader"
+      - "key_unknown"
     device_class: button
   - platform: template
     id: ir_code_receive
@@ -759,25 +765,6 @@ matrix_keypad:
     - pin: GPIO12
   keys: "0123456789AB"  # Pause, Play/Replay, Repeat, Shuffle; Previous, Open/Close, Stop/CP, Time; -, Program, Next, Peak Search/Fader
   on_key:
-    - text_sensor.template.publish:
-        id: last_key_pressed
-        state: !lambda |-
-          switch (x)
-          {
-            case '0': return std::string("Pause");
-            case '1': return std::string("Play/Replay");
-            case '2': return std::string("Repeat");
-            case '3': return std::string("Shuffle");
-            case '4': return std::string("Previous");
-            case '5': return std::string("Open/Close");
-            case '6': return std::string("Stop/CP");
-            case '7': return std::string("Time");
-            // '8' missing on purpose
-            case '9': return std::string("Program");
-            case 'A': return std::string("Next");
-            case 'B': return std::string("Peak Search/Fader");
-            default: return std::string("Unknown");
-          }
     - lambda: |-
         if (x == '9')
         {
@@ -796,7 +783,23 @@ matrix_keypad:
         }
     - event.trigger: 
         id: front_panel_keypress
-        event_type: "keypress"
+        event_type: !lambda |-
+          switch (x)
+          {
+            case '0': return "key_pause";
+            case '1': return "key_play";
+            case '2': return "key_repeat";
+            case '3': return "key_shuffle";
+            case '4': return "key_previous";
+            case '5': return "key_openclose";
+            case '6': return "key_stop";
+            case '7': return "key_time";
+            // '8' missing on purpose
+            case '9': return "key_program";
+            case 'A': return "key_next";
+            case 'B': return "key_peaksearch_fader";
+            default: return "key_unknown";
+          }
 
 spi:
   clk_pin: GPIO18
