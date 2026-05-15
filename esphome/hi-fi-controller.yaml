@@ -37,10 +37,11 @@ wifi:
 captive_portal:
 
 remote_transmitter:
+  id: wired_ir_transmitter
   pin: 
     number: GPIO13
     inverted: False
-  carrier_duty_percent: 100%  # use 100% duty cycle because SR-Link is a baseband wired signal
+  carrier_duty_percent: 99%  # use 100% duty cycle because SR-Link is a baseband wired signal
 
 uart:
   baud_rate: 9600
@@ -62,6 +63,13 @@ serial_proxy:
   uart_id: amp_uart
   name: "Amplifier Serial Proxy"
   port_type: RS232
+
+infrared:
+  - platform: ir_rf_proxy
+    id: pioneer_sr_bus
+    name: "SR bus"
+    device_id: pioneer_ctw620r
+    remote_transmitter_id: wired_ir_transmitter
     
 button:
   - platform: template
