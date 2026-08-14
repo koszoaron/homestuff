@@ -38,10 +38,10 @@ esp32_ble_tracker:
   scan_parameters:
     interval: 1100ms
     window: 1100ms
-#    active: true
+    active: False
 
 bluetooth_proxy:
-#  active: true
+  active: False
 
 uart:
   id: uart_bus
