@@ -1,0 +1,450 @@
+# =============================================================================
+#  Workspace temperature clock
+#  DEV-19  ESP-WROVER-KIT v4.1  (ESP32-WROVER-B, 4 MB PSRAM, 3.2" ILI9341)
+#  SEN-03  HTU21D  (I2C, 0x40)
+#
+#  - No WiFi credentials in the config; provisioning via captive portal
+#  - Stock fallback-AP behaviour; hold BOOT (SW3 / GPIO0) 5 s to re-provision
+#  - NTP clock (Europe/Budapest), "No network" when offline
+#  - Temperature + humidity under the clock, whole block moves & takes a new
+#    random HSV hue every 30 s
+#
+#  Tested-against: ESPHome 2025.x.  See notes at the bottom of the file.
+# =============================================================================
+
+substitutions:
+  device_name: workspace-clock
+  ap_ssid: "Workspace-Clock Setup"
+
+  # --- layout / colour tunables ---
+  line_gap: '-10'        # px between the clock line and the temp/hum line
+  sat_min: '90'          # random saturation range, percent (set both to 100
+  sat_max: '100'         #   for fully saturated colours)
+  hue_min_step: '40'     # min hue distance from the previous colour, degrees
+                         #   (0 = allow any hue, including near-repeats)
+
+  # --- board ---
+  # RGB LED polarity. 'true' = common anode (pin LOW lights the LED), which is
+  # what parks the LED off by driving the pins HIGH. Flip to 'false' if the
+  # green/blue LEDs light up instead of going dark after this change.
+  rgb_led_active_low: 'false'
+
+esphome:
+  name: ${device_name}
+  friendly_name: Workspace Clock
+  on_boot:
+    priority: -100
+    then:
+      - output.turn_off: rgb_led_green
+      - output.turn_off: rgb_led_blue
+      - script.execute: reshuffle
+
+esp32:
+  board: esp-wrover-kit
+  framework:
+    type: esp-idf
+
+# WROVER has PSRAM - needed for the full 16-bit 320x240 frame buffer (150 kB)
+psram:
+
+logger:
+  level: INFO
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+# Web UI: backlight brightness + temperature offset. No auth (trusted LAN),
+# and no OTA upload form - firmware updates go through the ESPHome dashboard
+# with the password above.
+web_server:
+  port: 80
+  version: 3
+  ota: false
+  local: true   # embed the UI assets in flash instead of pulling them from
+                  # the CDN; costs ~150 kB of the 4 MB but works offline
+
+captive_portal:
+
+# -----------------------------------------------------------------------------
+# WiFi
+# -----------------------------------------------------------------------------
+# No networks are configured, so on a virgin device the fallback AP comes up
+# straight away.  Credentials entered through the captive portal are stored in
+# flash and loaded on every subsequent boot; if the stored network is not
+# reachable, the AP returns after ap_timeout.
+#
+# reboot_timeout: 0s -> never reboot just because there is no connection
+#                       (default is 15 min, which would loop while unprovisioned)
+# -----------------------------------------------------------------------------
+wifi:
+  ap:
+    ssid: ${ap_ssid}
+    ap_timeout: 1min
+  reboot_timeout: 0s
+  power_save_mode: none
+
+# -----------------------------------------------------------------------------
+# Time
+# -----------------------------------------------------------------------------
+time:
+  - platform: sntp
+    id: sys_time
+    timezone: Europe/Budapest
+    servers:
+      - 0.pool.ntp.org
+      - 1.pool.ntp.org
+      - 2.pool.ntp.org
+
+# -----------------------------------------------------------------------------
+# Buses
+# -----------------------------------------------------------------------------
+# LCD is on VSPI/HSPI pins of the WROVER-KIT; MISO (GPIO25) is not needed.
+spi:
+  clk_pin: GPIO19
+  mosi_pin: GPIO23
+
+# GPIO26/27 are the camera SCCB pins - free when no camera module is fitted.
+i2c:
+  sda: GPIO26
+  scl: GPIO27
+  frequency: 100kHz
+  scan: true
+
+# -----------------------------------------------------------------------------
+# Backlight (GPIO5, active LOW on WROVER-KIT v4.1)
+# -----------------------------------------------------------------------------
+output:
+  - platform: ledc
+    pin: GPIO5
+    id: lcd_bl_out
+    inverted: true
+
+  # On-board RGB LED (R=GPIO0, G=GPIO2, B=GPIO4). Only green and blue can be
+  # parked here - GPIO0 is the BOOT button, see the notes at the end of the
+  # file. GPIOBinaryOutput drives its inactive level during setup(), so simply
+  # declaring these with the right polarity turns them off at boot.
+  - platform: gpio
+    id: rgb_led_green
+    pin:
+      number: GPIO2
+      inverted: ${rgb_led_active_low}
+  - platform: gpio
+    id: rgb_led_blue
+    pin:
+      number: GPIO4
+      inverted: ${rgb_led_active_low}
+
+light:
+  - platform: monochromatic
+    output: lcd_bl_out
+    id: lcd_backlight
+    name: "LCD backlight"
+    restore_mode: RESTORE_DEFAULT_ON
+
+# -----------------------------------------------------------------------------
+# Sensor
+# -----------------------------------------------------------------------------
+sensor:
+  - platform: htu21d
+    id: htu21d_sensor
+    update_interval: 30s
+    temperature:
+      id: t_temp
+      name: "Temperature"
+      accuracy_decimals: 1
+      filters:
+        - sliding_window_moving_average:
+            window_size: 3
+            send_every: 1
+        - lambda: |-
+            return x + id(temp_offset).state;
+    humidity:
+      id: t_hum
+      name: "Humidity"
+      accuracy_decimals: 0
+
+number:
+  - platform: template
+    id: temp_offset
+    name: "Temperature offset"
+    icon: "mdi:thermometer-plus"
+    entity_category: config
+    unit_of_measurement: "°C"
+    mode: box
+    optimistic: true
+    restore_value: true
+    initial_value: 0.0
+    min_value: -5.0
+    max_value: 5.0
+    step: 0.1
+    on_value:
+      # Force a fresh reading so the change shows up immediately instead of
+      # waiting for the next 30 s poll.
+      - component.update: htu21d_sensor
+
+# -----------------------------------------------------------------------------
+# BOOT button (SW3 = GPIO0, active low, external pull-up present)
+# -----------------------------------------------------------------------------
+binary_sensor:
+  - platform: gpio
+    id: boot_button
+    name: "Boot button"
+    internal: true
+    pin:
+      number: GPIO0
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    filters:
+      - delayed_on: 30ms
+    on_press:
+      - script.execute: ap_hold_timer
+    on_release:
+      - script.stop: ap_hold_timer
+
+# -----------------------------------------------------------------------------
+# State
+# -----------------------------------------------------------------------------
+globals:
+  - id: pos_x
+    type: int
+    initial_value: '8'
+  - id: pos_y
+    type: int
+    initial_value: '8'
+  - id: hue          # 0..359 degrees
+    type: int
+    initial_value: '0'
+  - id: sat_pct      # 0..100 percent
+    type: int
+    initial_value: '100'
+
+# -----------------------------------------------------------------------------
+# Fonts
+# -----------------------------------------------------------------------------
+font:
+  # Digital-clock look. Swap for a local DSEG7 Classic if you want true 7-seg.
+  - file:
+      type: gfonts
+      family: Orbitron
+      weight: 700
+    id: font_clock
+    size: 54
+    glyphs: "0123456789:"
+
+  # Used for the "No network" placeholder (DSEG7/Orbitron-glyph-limited fonts
+  # cannot render letters, so this one takes the clock's slot when offline).
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 500
+    id: font_alt
+    size: 36
+
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 400
+    id: font_small
+    size: 20
+    glyphs: " !%.,:;-+/()0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz\u00b0"
+
+# -----------------------------------------------------------------------------
+# Display
+# -----------------------------------------------------------------------------
+display:
+  - platform: ili9xxx
+    id: lcd
+    model: ILI9341
+    cs_pin: GPIO22
+    dc_pin: GPIO21
+    reset_pin: GPIO18
+    rotation: 90            # -> 320 x 240 landscape
+    data_rate: 40MHz
+    invert_colors: false
+    update_interval: 1s
+    lambda: |-
+      // HSV -> RGB.  h in degrees, s and v in 0..1.
+      auto hsv2rgb = [](float h, float s, float v) -> Color {
+        h = fmodf(fmodf(h, 360.0f) + 360.0f, 360.0f) / 60.0f;
+        const float c = v * s;
+        const float x = c * (1.0f - fabsf(fmodf(h, 2.0f) - 1.0f));
+        const float m = v - c;
+        float r = 0.0f, g = 0.0f, b = 0.0f;
+        switch ((int) h) {
+          case 0:  r = c; g = x;        break;
+          case 1:  r = x; g = c;        break;
+          case 2:         g = c; b = x; break;
+          case 3:         g = x; b = c; break;
+          case 4:  r = x;        b = c; break;
+          default: r = c;        b = x; break;
+        }
+        return Color((uint8_t) lroundf((r + m) * 255.0f),
+                     (uint8_t) lroundf((g + m) * 255.0f),
+                     (uint8_t) lroundf((b + m) * 255.0f));
+      };
+
+      it.fill(Color::BLACK);
+
+      const Color fg = hsv2rgb((float) id(hue), id(sat_pct) / 100.0f, 1.0f);
+      const int ox = id(pos_x);
+      const int oy = id(pos_y);
+
+      int w = 0, h = 0, xo = 0, bl = 0;
+      int block_w = 0, head_h = 0;
+
+      const bool net_ok =
+          wifi::global_wifi_component->is_connected() && id(sys_time).now().is_valid();
+
+      // ---- top line: clock or "No network" -----------------------------
+      if (net_ok) {
+        auto t = id(sys_time).now();
+        char cbuf[8];
+        snprintf(cbuf, sizeof(cbuf), "%02d:%02d", t.hour, t.minute);
+        id(font_clock)->measure(cbuf, &w, &xo, &bl, &h);
+        block_w = w;
+        head_h = h;
+        it.print(ox, oy, id(font_clock), fg, TextAlign::TOP_LEFT, cbuf);
+      } else {
+        const char *msg = "No network";
+        id(font_alt)->measure(msg, &w, &xo, &bl, &h);
+        block_w = w;
+        head_h = h;
+        it.print(ox, oy, id(font_alt), fg, TextAlign::TOP_LEFT, msg);
+      }
+
+      // ---- bottom line: temperature (left) / humidity (right) ----------
+      char tbuf[16];
+      char hbuf[16];
+
+      if (isnan(id(t_temp).state))
+        snprintf(tbuf, sizeof(tbuf), "--.- \u00b0C");
+      else
+        snprintf(tbuf, sizeof(tbuf), "%.1f \u00b0C", id(t_temp).state);
+
+      if (isnan(id(t_hum).state))
+        snprintf(hbuf, sizeof(hbuf), "-- %%");
+      else
+        snprintf(hbuf, sizeof(hbuf), "%.0f %%", id(t_hum).state);
+
+      int tw = 0, hw = 0;
+      id(font_small)->measure(tbuf, &tw, &xo, &bl, &h);
+      id(font_small)->measure(hbuf, &hw, &xo, &bl, &h);
+      if (tw + hw + 16 > block_w)
+        block_w = tw + hw + 16;
+
+      const int y2 = oy + head_h + ${line_gap};
+      it.print(ox, y2, id(font_small), fg, TextAlign::TOP_LEFT, tbuf);
+      it.print(ox + block_w, y2, id(font_small), fg, TextAlign::TOP_RIGHT, hbuf);
+
+      // ---- setup-AP hint (delete this block if you don't want it) ------
+      // Shown whenever there is no STA connection; the fallback AP is up
+      // within ap_timeout of that becoming true.
+      if (!net_ok) {
+        it.print(4, it.get_height() - 2, id(font_small), Color(120, 120, 120),
+                 TextAlign::BOTTOM_LEFT, "Setup AP: ${ap_ssid}");
+      }
+
+# -----------------------------------------------------------------------------
+# Scripts
+# -----------------------------------------------------------------------------
+script:
+  # New random position + next colour in the cycle.
+  - id: reshuffle
+    mode: single
+    then:
+      - lambda: |-
+          int w = 0, h = 0, xo = 0, bl = 0;
+          int bw = 0, bh = 0;
+
+          id(font_clock)->measure("00:00", &w, &xo, &bl, &h);
+          bw = w; bh = h;
+
+          id(font_alt)->measure("No network", &w, &xo, &bl, &h);
+          if (w > bw) bw = w;
+          if (h > bh) bh = h;
+
+          int sw = 0, sh = 0;
+          id(font_small)->measure("-00.0 \u00b0C", &sw, &xo, &bl, &sh);
+          if (2 * sw + 16 > bw) bw = 2 * sw + 16;
+          bh += ${line_gap} + sh;
+
+          const int margin = 6;
+          int max_x = id(lcd).get_width()  - bw - 2 * margin;
+          int max_y = id(lcd).get_height() - bh - 2 * margin;
+          if (max_x < 0) max_x = 0;
+          if (max_y < 0) max_y = 0;
+
+          id(pos_x) = margin + (int) (random_uint32() % (uint32_t) (max_x + 1));
+          id(pos_y) = margin + (int) (random_uint32() % (uint32_t) (max_y + 1));
+
+          // Random hue, kept at least ${hue_min_step} degrees away from the
+          // previous one so two consecutive colours are never near-identical.
+          int nh = id(hue);
+          for (int tries = 0; tries < 16; tries++) {
+            nh = (int) (random_uint32() % 360u);
+            int d = abs(((nh - id(hue) + 540) % 360) - 180);
+            if (d >= ${hue_min_step}) break;
+          }
+          id(hue) = nh;
+
+          id(sat_pct) = ${sat_min} +
+              (int) (random_uint32() % (uint32_t) (${sat_max} - ${sat_min} + 1));
+
+  # BOOT held for 5 s -> forget the stored WiFi credentials and reboot, which
+  # lands the device back in "virgin" state and therefore back in the AP.
+  # NOTE: this clears *all* stored preferences, not only the WiFi ones.
+  # Delete this script (and the binary_sensor above) if you don't want it.
+  - id: ap_hold_timer
+    mode: restart
+    then:
+      - delay: 5s
+      - logger.log: "BOOT held 5 s - clearing stored WiFi credentials, rebooting"
+      - lambda: |-
+          global_preferences->reset();
+      - delay: 1s
+      - lambda: |-
+          App.safe_reboot();
+
+interval:
+  - interval: 30s
+    then:
+      - script.execute: reshuffle
+
+# =============================================================================
+# Notes
+# =============================================================================
+# Pin map used (ESP-WROVER-KIT v4.1):
+#   GPIO19 LCD SCK      GPIO23 LCD MOSI     GPIO22 LCD CS
+#   GPIO21 LCD D/C      GPIO18 LCD RESET    GPIO5  LCD backlight (active low)
+#   GPIO0  BOOT / SW3   GPIO26 SDA          GPIO27 SCL
+#
+# Free-but-occupied elsewhere on the board: GPIO2/4/12/13/14/15 (microSD),
+# GPIO0/2/4 (RGB LED). GPIO0 is shared with the red LED, so the red channel
+# cannot be parked as an output while the BOOT button is in use. If red still
+# glows and you would rather lose the button: delete the boot_button
+# binary_sensor and the ap_hold_timer script, and add
+#
+#   - platform: gpio
+#     id: rgb_led_red
+#     pin:
+#       number: GPIO0
+#       inverted: ${rgb_led_active_low}
+#
+# to the output: block (plus an output.turn_off in on_boot).
+#
+# The small red LEDs near the FT2232H are hardwired power / USB-JTAG activity
+# indicators. They are not connected to the ESP32 and cannot be controlled
+# from firmware - only by depopulating them.
+#
+# Provisioning: on a fresh device the AP "${ap_ssid}" is up immediately - join
+# it, the captive portal opens, enter the credentials. The device reboots after
+# saving and connects normally from then on. If the stored network disappears,
+# the AP comes back automatically after ap_timeout (1 min).
+#
+# To re-provision onto a different network while the current one still works:
+# hold BOOT for 5 s. That wipes the stored preferences and reboots, so the AP
+# comes up again.
+# =============================================================================
