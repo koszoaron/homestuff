@@ -83,13 +83,66 @@ board_hardware.bod = 2.7v          ; brown-out detection ON — this is a wet-en
 board_hardware.eesave = yes
 ```
 
-Burn once per chip, over ISP:
+Burn once per chip, over ISP.
 
-```bash
-pio run -e uno_isp -t fuses
+### ⚠ Do NOT use `-t fuses` on this part — it silently disables BOD
+
+**`pio run -t fuses` writes the wrong extended fuse on the ATmega168.** This is a
+bug in the PlatformIO `atmelavr` platform, not a configuration mistake, and it
+defeats the one fuse this project cares most about.
+
+In `~/.platformio/platforms/atmelavr/builder/fuses.py`, `get_efuse()` sorts the
+ATmega168 into `targets_3`, whose branch ignores the `bod` argument entirely:
+
+```python
+elif target in targets_3:          # atmega168, atmega88, ...
+    if is_urboot_or_noboot:
+        return 0xFF                # BODLEVEL=111 -> BOD DISABLED
+    else:
+        return 0xFD
 ```
 
+`targets_1` (ATmega328P, identical BODLEVEL encoding) maps `2.7v` to `0xFD`
+correctly, so this is specific to the '168/'88. With `uart = no_bootloader`
+set above, the console prints a reassuring `BOD level = 2.7v` and then burns
+`efuse = 0xFF`, leaving brown-out detection **off** on a wet-environment
+appliance. Verified on platform `atmelavr` 5.3.0 / avrdude 8.1, 2026-08-19.
+
+Burn the fuse bytes literally instead, and read them back:
+
+```bash
+avrdude -c stk500v1 -P /dev/ttyACM0 -b 19200 -p m168 \
+        -U efuse:w:0xFD:m -U hfuse:w:0xD5:m -U lfuse:w:0xE2:m \
+        -U lfuse:r:-:h -U hfuse:r:-:h -U efuse:r:-:h
+```
+
+Write `lfuse` **last** — it is the one that moves the chip onto the internal RC,
+and on a chip fused for a crystal that is not present, everything before it has
+to happen on whatever marginal clock the part is limping along on.
+
+| Fuse | Value | Meaning |
+|-------|--------|---------|
+| lfuse | `0xE2` | internal 8 MHz RC, CKDIV8 off, CKOUT off |
+| hfuse | `0xD5` | SPIEN on, RSTDISBL off, EESAVE on, BOOTRST off (no bootloader) |
+| efuse | `0xFD` | BODLEVEL=101 → **BOD 2.7 V** |
+
+MCU-02 was burned to exactly these values on 2026-08-19 and read back verified.
+
 Never touch **RSTDISBL** or **SPIEN**. Never set the oscillator to external — there is no crystal on this board.
+
+### Chips are not necessarily blank
+
+MCU-02 arrived fused for an **external 8–16 MHz crystal** (`lfuse = 0xFF`), not at
+the factory default of `0x62`. With no crystal on the board, XTAL1 floats and the
+oscillator amplifier self-oscillates on stray noise somewhere in the tens of kHz.
+The symptom is distinctive and easy to misread as bad wiring: a 3-byte signature
+read succeeds at a low enough ISP clock, but any real flash write comes back with
+verification mismatches.
+
+If a chip behaves this way, feed a clock into **XTAL1 (DIP pin 9)** — an Arduino
+pin toggling at ~1 MHz is fine, leave XTAL2 unconnected — then burn `lfuse` to
+put it on the internal RC and remove the injected clock. Always read the fuses
+before concluding a target is miswired.
 
 ## Toolchain & Build System
 
@@ -101,8 +154,10 @@ pip install platformio     # once
 pio run                              # build
 pio run -e uno_isp -t upload         # flash via Arduino UNO as ISP
 pio run -e buspirate -t upload       # flash via Bus Pirate
-pio run -e uno_isp -t fuses          # burn fuses (once per chip)
 pio run -t clean
+
+# Fuses: do NOT use `-t fuses` on the ATmega168 -- it disables BOD.
+# See "Do NOT use -t fuses on this part" above for the avrdude command.
 ```
 
 ### platformio.ini (canonical contents)
