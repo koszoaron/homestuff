@@ -13,14 +13,35 @@
 /*
  * --- Float sensor inputs ---------------------------------------------
  *
- * Wired active LOW: the internal pull-up (plus an external 10k) holds the
- * pin high, and the float switch closes it to ground when raised. That
- * polarity is inverted exactly once, in readFloat() -- see main.cpp.
+ * The switches are normally CLOSED with the float resting in its downward
+ * position and open once water lifts it. Against the internal pull-up plus
+ * an external 10k that gives:
+ *
+ *     pin LOW  = switch ON  = float down = water below this sensor
+ *     pin HIGH = switch OFF = float up   = water has reached this sensor
+ *
+ * The pin level becomes "true = switch ON" exactly once, in readSwitchOn()
+ * -- see main.cpp. Note that a switch being ON means the tank is *empty* at
+ * that height, which is why LOW-LOW is the empty tank and not the full one.
+ *
+ * Consequence worth knowing: a cut sensor cable leaves the pin pulled up,
+ * which reads the same as a raised float, so the tank reports fuller than
+ * it is. That is the safe direction here, so it is deliberate rather than
+ * something to "fix".
  */
 constexpr uint8_t PIN_FLOAT_MID = 2;   /* PD2, DIP 4 */
 constexpr uint8_t PIN_FLOAT_TOP = 3;   /* PD3, DIP 5 */
 
-/* --- Mirror outputs to the downstream ESP32-C6 (active HIGH) --------- */
+/*
+ * --- Mirror outputs to the downstream ESP32-C6 -----------------------
+ *
+ * Each pin repeats the level of its matching input pin: LOW while the
+ * switch is ON, HIGH once water has raised the float. The inversion the C6
+ * expects is supplied by the BUFFER between the two chips, so it must not
+ * be done here as well -- inverting in both places cancels out. Both lines
+ * therefore idle LOW at the ATmega on an empty tank. Nothing is
+ * special-cased here, the FAULT combination included.
+ */
 constexpr uint8_t PIN_OUT_MID = 6;     /* PD6, DIP 12 */
 constexpr uint8_t PIN_OUT_TOP = 7;     /* PD7, DIP 13 */
 

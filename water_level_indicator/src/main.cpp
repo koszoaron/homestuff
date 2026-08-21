@@ -1,10 +1,11 @@
 /*
  * Water level indicator for a two-float water container.
  *
- * Reads two float switches, debounces them, mirrors the debounced states to
- * a downstream ESP32-C6, and shows the level on a green/yellow/red LED.
- * See CLAUDE.md for the behaviour table and the constraints this code works
- * under (Arduino API only, no ISRs, no delay() in loop()).
+ * Reads two float switches, debounces them, drives a green/yellow/red LED
+ * from the resulting level, and hands the debounced states to a downstream
+ * ESP32-C6 as an inverse mirror of the switch inputs. See CLAUDE.md for the
+ * behaviour table and the constraints this code works under (Arduino API
+ * only, no ISRs, no delay() in loop()).
  */
 
 #include <Arduino.h>
@@ -33,17 +34,19 @@ static unsigned long lastBlinkToggle;
 static bool blinkOn;
 
 /*
- * The only place that knows the sensors are active LOW. Everything
- * downstream reads "true = float raised / wet".
+ * The only place that knows how the sensors are wired. The switches are
+ * closed while the float rests down and open as water lifts it, so a
+ * pulled-up pin reads LOW while the switch is ON. Everything downstream
+ * reads "true = switch ON = water is below this float".
  */
-static bool readFloat(uint8_t pin)
+static bool readSwitchOn(uint8_t pin)
 {
     return digitalRead(pin) == LOW;
 }
 
 static void initDebouncer(Debouncer &d, uint8_t pin)
 {
-    const bool raw = readFloat(pin);
+    const bool raw = readSwitchOn(pin);
 
     d.pin = pin;
     d.raw = raw;
@@ -57,7 +60,7 @@ static void initDebouncer(Debouncer &d, uint8_t pin)
 
 static void updateDebouncer(Debouncer &d)
 {
-    const bool raw = readFloat(d.pin);
+    const bool raw = readSwitchOn(d.pin);
 
     if (raw != d.raw) {
         /* Reading moved: restart the stability window. */
@@ -86,28 +89,26 @@ static void updateBlink()
     }
 }
 
-static Level levelFrom(bool mid, bool top)
+static Level levelFrom(bool midOn, bool topOn)
 {
-    if (top) {
-        /*
-         * Top raised while the middle float is not is physically impossible
-         * with working sensors, so treat it as a fault rather than as
-         * "full" -- it means a sensor or its wiring has failed.
-         */
-        return mid ? Level::HIGH_ : Level::FAULT;
+    if (topOn) {
+        /* Top float still down, so the water is below it. */
+        return midOn ? Level::LOW_ : Level::MID;
     }
-    return mid ? Level::MID : Level::LOW_;
+
+    /*
+     * Top float raised. The middle one must be raised as well; a middle
+     * switch that is still ON says the water cannot have reached the top,
+     * so a sensor or its wiring has failed.
+     */
+    return midOn ? Level::FAULT : Level::HIGH_;
 }
 
-static void applyOutputs(Level level, bool mid, bool top)
+static void applyOutputs(Level level, bool midOn, bool topOn)
 {
     bool green = false;
     bool yellow = false;
     bool red = false;
-
-    /* Mirrors normally just follow the debounced readings. */
-    bool outMid = mid;
-    bool outTop = top;
 
     switch (level) {
     case Level::LOW_:
@@ -124,12 +125,6 @@ static void applyOutputs(Level level, bool mid, bool top)
 
     case Level::FAULT:
         red = blinkOn;
-        /*
-         * Err toward "tank full" so the downstream MCU takes the safe
-         * action while a sensor is misbehaving.
-         */
-        outMid = true;
-        outTop = true;
         break;
     }
 
@@ -137,8 +132,16 @@ static void applyOutputs(Level level, bool mid, bool top)
     digitalWrite(PIN_LED_YELLOW, yellow);
     digitalWrite(PIN_LED_RED, red);
 
-    digitalWrite(PIN_OUT_MID, outMid);
-    digitalWrite(PIN_OUT_TOP, outTop);
+    /*
+     * Each mirror pin simply repeats the level of its input pin: LOW while
+     * the switch is ON, HIGH once water has raised the float. The buffer
+     * between here and the C6 supplies the inversion, so this code must not
+     * invert as well -- doing it in both places cancels out, which is what
+     * the bench showed on 2026-08-22. FAULT is deliberately not
+     * special-cased; the C6 gets the raw combination and can flag it itself.
+     */
+    digitalWrite(PIN_OUT_MID, midOn ? LOW : HIGH);
+    digitalWrite(PIN_OUT_TOP, topOn ? LOW : HIGH);
 }
 
 void setup()
@@ -154,8 +157,18 @@ void setup()
     pinMode(PIN_FLOAT_MID, INPUT_PULLUP);
     pinMode(PIN_FLOAT_TOP, INPUT_PULLUP);
 
+    /*
+     * The mirrors idle LOW (empty tank), so set that level before switching
+     * the pins to outputs. A pin configured as an output happens to start
+     * LOW already, making this redundant today -- it is spelled out anyway
+     * so that the idle level is stated once, in code, rather than resting on
+     * an AVR default that a polarity change would silently invalidate.
+     */
+    digitalWrite(PIN_OUT_MID, LOW);
+    digitalWrite(PIN_OUT_TOP, LOW);
     pinMode(PIN_OUT_MID, OUTPUT);
     pinMode(PIN_OUT_TOP, OUTPUT);
+
     pinMode(PIN_LED_GREEN, OUTPUT);
     pinMode(PIN_LED_YELLOW, OUTPUT);
     pinMode(PIN_LED_RED, OUTPUT);

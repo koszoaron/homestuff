@@ -6,12 +6,14 @@ Guidance for Claude (and humans) working in this repository. Read this before wr
 
 Firmware for a barebones **ATmega168-20PU** (inventory ID **MCU-02**, DIP-28, internal RC oscillator, no crystal) that monitors two float sensors in a water container and:
 
-1. **Mirrors** both sensor states (after debouncing) on two output pins consumed by a second microcontroller.
+1. **Mirrors** both switch states (after debouncing) on two output pins consumed by a second microcontroller. The ATmega pins repeat the input pins; the **buffer between the two chips inverts**, so the downstream MCU ends up seeing HIGH-HIGH on an empty tank and LOW-LOW on a full one. The firmware itself does no inversion here — see the warning under "Pin Map".
 2. **Drives three LEDs** indicating water level:
-   - **GREEN** — level below the middle sensor (both floats open)
-   - **YELLOW** — level above middle, below top (middle closed, top open)
-   - **RED** — top sensor reached (top closed)
-   - **FAULT** (top closed but middle open — physically impossible with working sensors): blink RED at 2 Hz and assert both mirror outputs so the downstream MCU sees the safe/worst-case state.
+   - **GREEN** — level below the middle sensor (both switches ON)
+   - **YELLOW** — level above middle, below top (middle switch OFF, top ON)
+   - **RED** — top sensor reached (both switches OFF)
+   - **FAULT** (middle switch ON while the top one is OFF — physically impossible with working sensors): blink RED at 2 Hz.
+
+**The mirror outputs are never forced, FAULT included.** They are a pure inverse of the two debounced switch inputs in all four rows of the state table. This replaced an earlier design that asserted both outputs during FAULT so the C6 would err toward "tank full"; the owner changed his mind on 2026-08-21. FAULT still exists — it is just an **LED-only** state now. Do not reintroduce output forcing, and do not remove the blink.
 
 ### Design philosophy for this repo
 
@@ -39,6 +41,18 @@ The whole board runs from the **3.3 V rail supplied by the upstream ESP32-C6**. 
 ### Consequences for the hardware
 
 **Float sensor inputs.** The internal pull-ups are weak (20–50 kΩ). Combined with a long run of cable to a tank and a smaller noise margin at 3.3 V, that is an easy way to pick up interference. Fit **external 10 kΩ pull-ups to 3.3 V** at the MCU, and an **RC filter at each input pin** (10 kΩ series + 100 nF to ground gives ~1 ms). Keep the internal pull-ups enabled anyway; they cost nothing. The 50 ms software debounce stays regardless — it solves mechanical chatter, not electrical noise, and the two problems need separate fixes.
+
+**The float switches are normally CLOSED with the float down.** Confirmed on the bench, 2026-08-21. The contact closes the pin to ground while the float rests in its downward position and opens as water lifts it:
+
+| Pin  | Switch | Float | Meaning |
+|------|--------|-------|---------|
+| LOW  | ON (closed)  | down | water is **below** this sensor |
+| HIGH | OFF (open)   | up   | water has **reached** this sensor |
+
+The trap to keep in mind: a switch being **ON means the tank is empty at that height**, so LOW-LOW is an empty tank, not a full one. This is the opposite of what the firmware originally assumed (it was written for normally-open floats) and is the reason the level mapping was reversed on 2026-08-21. Two more things follow:
+
+- A **cut sensor cable** leaves the pin pulled up, which reads identically to a raised float — the tank reports fuller than it is. That is the safe direction for this appliance, so it is intentional; do not "fix" it by flipping the sense.
+- The switch sits **closed** whenever the water is below it, i.e. most of the time, so the pull-ups sink current continuously (≈330 µA per input at 3.3 V through 10 kΩ). Irrelevant on a mains-powered always-on board — noted only so it is not mistaken for a wiring fault.
 
 **LED series resistors must be recalculated — this is not a 5 V design.** With only 3.3 V of headroom:
 - Red and yellow (V<sub>f</sub> ≈ 2.0 V): 1.3 V across the resistor. 220 Ω gives ~6 mA, 470 Ω gives ~3 mA.
@@ -185,9 +199,11 @@ build_flags = -Wall
 upload_protocol = stk500v1
 upload_port = /dev/ttyACM0          ; adjust
 board_upload.speed = 19200          ; ArduinoISP's own baud rate
+; -e forces an explicit chip erase -- see "Uploads need an explicit -e" below.
 upload_flags =
     -P$UPLOAD_PORT
     -b$UPLOAD_SPEED
+    -e
 
 ; --- Bus Pirate as ISP ---
 [env:buspirate]
@@ -198,6 +214,50 @@ upload_port = /dev/ttyUSB0          ; adjust
 Notes:
 - No `-Werror`. The Arduino core headers emit warnings; failing the build on them is pure friction.
 - `board_build.variant = standard` gives UNO-compatible digital pin numbering (PD2 = D2, PB0 = D8, …).
+
+### ⚠ Uploads need an explicit `-e`
+
+avrdude's default auto-erase does **not** reliably fire through ArduinoISP on this
+target. Without `-e` the write lands on non-erased flash, so what ends up in the
+chip is the bitwise AND of the old and new contents, and verification fails:
+
+```
+avrdude: 1530 bytes of flash written
+avrdude warning: verification mismatch
+        device 0xf8 != input 0xfb at addr 0x00ee (error)
+```
+
+The diagnostic that identifies this rather than a flaky link: the mismatch is
+**bit-for-bit reproducible at the same address** across runs, and the device byte
+only ever has *extra* bits cleared relative to the input (`0xf8 = 0xfb & …`).
+Marginal SPI signalling produces mismatches that move around; a missing erase
+does not. Adding `-e` to `upload_flags` fixed it immediately, and the same
+mismatch had appeared once before on this rig for the same reason.
+
+Chip erase does not touch fuses, and `eesave = yes` protects the EEPROM, so `-e`
+is free here — there is no bootloader to preserve either.
+
+### ⚠ ArduinoISP needs a 10 µF cap on the **Uno's** RESET
+
+Opening `/dev/ttyACM0` asserts DTR and resets the Uno. Its bootloader then owns
+the port at 115200 while avrdude is speaking 19200, and the upload dies before it
+reaches the target:
+
+```
+avrdude error: protocol expects sync byte 0x14 but got 0x01
+```
+
+Fit **10 µF from the Uno's RESET to the Uno's GND** (negative leg to GND) to
+defeat the auto-reset. Two things to know:
+
+- Those `0x14` / `0x10` bytes are the *Uno's own bootloader* replying. Coherent
+  STK500 chatter at the wrong baud means the auto-reset problem; a genuinely
+  broken ISP link to the target gives timeouts or `not in sync` with no reply.
+  Do not go looking at the target wiring for this error.
+- The cap belongs on the **programmer**, not the target. It has been fitted
+  across the target ATmega168's RESET by mistake before, which looks identical
+  from the host side, does not help, and additionally interferes with the
+  programmer driving target RESET.
 
 ### Programming harness (chip on breadboard)
 
@@ -244,15 +304,21 @@ All pin numbers and timing constants live in `config.h` as `constexpr uint8_t` /
 
 | Signal     | Arduino pin | Port | DIP pin | Mode           | Notes |
 |------------|-------------|------|---------|----------------|-------|
-| FLOAT_MID  | D2          | PD2  | 4       | `INPUT_PULLUP` | Float closes to GND → **LOW = wet/raised** |
-| FLOAT_TOP  | D3          | PD3  | 5       | `INPUT_PULLUP` | LOW = wet/raised |
-| OUT_MID    | D6          | PD6  | 12      | `OUTPUT`       | Debounced mirror of FLOAT_MID, **active HIGH** |
-| OUT_TOP    | D7          | PD7  | 13      | `OUTPUT`       | Debounced mirror of FLOAT_TOP, active HIGH |
+| FLOAT_MID  | D2          | PD2  | 4       | `INPUT_PULLUP` | NC switch, closed to GND while the float is down → **LOW = switch ON = water below** |
+| FLOAT_TOP  | D3          | PD3  | 5       | `INPUT_PULLUP` | LOW = switch ON = water below |
+| OUT_MID    | D6          | PD6  | 12      | `OUTPUT`       | Debounced copy of the FLOAT_MID **pin level**; **HIGH = water reached mid**. Inverted by the buffer downstream |
+| OUT_TOP    | D7          | PD7  | 13      | `OUTPUT`       | Debounced copy of the FLOAT_TOP pin level; HIGH = water reached top |
 | LED_GREEN  | D8          | PB0  | 14      | `OUTPUT`       | Active HIGH, series resistor |
 | LED_YELLOW | D9          | PB1  | 15      | `OUTPUT`       | Active HIGH |
 | LED_RED    | D10         | PB2  | 16      | `OUTPUT`       | Active HIGH |
 
-Note the polarity inversion: the sensor inputs are active LOW (pull-up + switch to ground), everything else is active HIGH. Do the inversion **once**, at the point of reading, in a small `readFloat()` helper that returns `true` for "raised". Nothing downstream should think about polarity again.
+Polarity, in one place each:
+
+- **Inputs**: the NC switch pulls its pin down while the float is down. `readSwitchOn()` is the only function that knows this; it returns `true` for "switch ON" and nothing downstream thinks about pin levels again.
+- **Mirror outputs** do **not** invert. Each pin repeats the level of its input pin, so the ATmega drives LOW while the switch is ON and HIGH once water raises the float. The inversion the C6 wants is supplied by the **buffer** between the two chips.
+- **LEDs** are active HIGH.
+
+⚠ **The firmware must not invert the mirrors, because the output buffer already does.** This was got wrong once (2026-08-22): `applyOutputs()` inverted *and* the buffer inverted, the two cancelled, and the C6 saw every level exactly backwards while the LEDs — which do not go through the buffer — stayed correct. That combination is the signature to recognise: **LEDs right, mirrors backwards, means a double inversion in the output path, not a sensor or level-logic problem.** If the buffer is ever swapped for a non-inverting part, put the `!` back in `applyOutputs()` in the same commit.
 
 Reserved, do not use:
 - **D11/D12/D13 (PB3/PB4/PB5)** — ISP. Keeping them clear means the programmer never fights an application load.
@@ -279,21 +345,38 @@ Absolutely no `delay()` in `loop()`. `delay()` in `setup()` is acceptable.
 
 ### State machine
 
-Inputs: debounced `mid`, `top` (true = float raised / wet).
+Inputs: debounced `midOn`, `topOn` — **true = switch ON = water is below that float**. This is the canonical table; ON/OFF is the primary column because it is the only description that does not invite a polarity mistake, with the pin levels alongside it for wiring work.
 
-| mid | top | State | LEDs              | Mirror outputs |
-|-----|-----|-------|-------------------|----------------|
-| 0   | 0   | LOW   | GREEN             | mid=0, top=0   |
-| 1   | 0   | MID   | YELLOW            | mid=1, top=0   |
-| 1   | 1   | HIGH  | RED               | mid=1, top=1   |
-| 0   | 1   | FAULT | RED blinking 2 Hz | mid=1, top=1   |
+| MID   | TOP   | midOn | topOn | State | LED    | OUT_MID | OUT_TOP |
+|-------|-------|-------|-------|-------|--------|---------|---------|
+| ON    | ON    | 1     | 1     | LOW   | GREEN  | OFF     | OFF     |
+| OFF   | ON    | 0     | 1     | MID   | YELLOW | ON      | OFF     |
+| OFF   | OFF   | 0     | 0     | HIGH  | RED    | ON      | ON      |
+| ON    | OFF   | 1     | 0     | FAULT | RED 2 Hz | OFF   | ON      |
+
+The same table in volts. Inputs are ON at LOW (the switch closes to GND). The ATmega's output pins simply **repeat** their input pin, and the **buffer inverts**, so the C6 ends up seeing ON = LOW:
+
+| MID pin | TOP pin | State | OUT_MID pin | OUT_TOP pin | C6 sees MID | C6 sees TOP |
+|---------|---------|-------|-------------|-------------|-------------|-------------|
+| LOW     | LOW     | LOW   | LOW         | LOW         | HIGH (OFF)  | HIGH (OFF)  |
+| HIGH    | LOW     | MID   | HIGH        | LOW         | LOW (ON)    | HIGH (OFF)  |
+| HIGH    | HIGH    | HIGH  | HIGH        | HIGH        | LOW (ON)    | LOW (ON)    |
+| LOW     | HIGH    | FAULT | LOW         | HIGH        | HIGH (OFF)  | LOW (ON)    |
+
+The `OUT_x pin` column being identical to the matching input column is the point: **the firmware does no inversion at all on this path.**
 
 - Exactly one LED lit at any time (blinking counts as the RED LED toggling; the other two stay off).
-- Mirror outputs follow the debounced values, **except** in FAULT, where both are forced HIGH so the downstream MCU errs toward "tank full".
-- FAULT is not latched — it clears as soon as the sensor combination becomes valid again.
+- The mirror outputs are a **pure inverse of the debounced switches** in every row, FAULT included. Nothing is forced and nothing is filtered, so `OUT_x` is ON exactly when water has reached float *x*.
+- **FAULT** (middle switch ON while the top one is OFF) is physically impossible with working sensors and means a sensor or its wiring has failed. It shows on the **LED only**; the outputs pass the raw combination through and the C6 can flag it itself.
+- FAULT is not latched — it clears as soon as the switch combination becomes valid again.
 - The 2 Hz blink is another `millis()` comparison against `BLINK_MS = 250`, not `delay()`.
+- ⚠ **A dead ATmega now reads as "empty", not "full".** Its pins go low or floating, the inverting buffer turns that into HIGH-HIGH, and the C6 reads an empty tank — so a failed MCU is indistinguishable from a normal empty tank and silently stops reporting. The earlier design erred toward "full" instead. If that matters once this feeds Home Assistant, solve it on the C6 side with a heartbeat or a staleness timeout rather than by re-inverting the mirrors, which would undo the fix above.
 
 Implement as a `switch` on an `enum class Level { LOW_, MID, HIGH_, FAULT }` (or plain `enum` — note `LOW`/`HIGH` are Arduino macros, so the enumerators need different names).
+
+### Power-up order of the mirror pins
+
+`setup()` writes the mirror pins **LOW** before calling `pinMode(…, OUTPUT)` on them. An AVR pin switched to output already starts LOW, and LOW is the empty-tank level, so this is redundant as the code stands. It is spelled out anyway so the idle level is stated once in code instead of resting on an AVR default — the ordering mattered under the previous polarity and would matter again if the polarity moved.
 
 ### Watchdog
 
